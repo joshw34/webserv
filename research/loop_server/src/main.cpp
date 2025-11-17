@@ -14,6 +14,21 @@ int exit_failure(const std::string& msg, int err, int sockfd, int connection) {
   return EXIT_FAILURE;
 }
 
+bool readFromSocket(int connection, std::string& full_msg) {
+  char buffer[10];
+  ssize_t bytes_read = read(connection, buffer, sizeof(buffer) - 1);
+  buffer[bytes_read] = '\0';
+  if (bytes_read == 2)
+    return false;
+  full_msg += buffer;
+  if (full_msg.back() == '\n') {
+    full_msg.pop_back();
+    full_msg.pop_back();
+    return false;
+  }
+  return true;
+}
+
 int main() {
   int sockfd = socket(AF_INET, SOCK_STREAM, 0);
   if (sockfd == -1)
@@ -39,17 +54,22 @@ int main() {
   if (connection < 0)
     return exit_failure("Failed to grab connection", errno, sockfd, -1);
 
-  char buffer[100];
-  ssize_t bytes_read = read(connection, buffer, sizeof(buffer) - 1);
-  if (bytes_read < 0)
-    return exit_failure("Could not read received message", errno, sockfd, connection);
-  buffer[bytes_read] = '\0';
-  std::cout << "Message received:\n" << buffer << std::endl;
+  while (true) {
 
-  std::string response = "Message Received!\n";
-  if (send(connection, response.c_str(), response.size(), 0) < 0)
-    return exit_failure("Failed to send response", errno, sockfd, connection);
+    std::string full_msg; 
+    
+    while (readFromSocket(connection, full_msg)) {}
 
+    std::cout << "Message received:\n" << full_msg << std::endl;
+
+    std::string response = "Message Received!\n";
+    if (send(connection, response.c_str(), response.size(), 0) < 0)
+      return exit_failure("Failed to send response", errno, sockfd, connection);
+
+    if (full_msg.compare("END") == 0)
+        break;
+  }
+  
   close(connection);
   close(sockfd);
   return EXIT_SUCCESS;
